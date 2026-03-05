@@ -19,6 +19,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 const state = {
     user: null,
     payslips: [],
+    documentSubscription: null,
     admin: {
         totalEmployees: '0',
         employeesTrend: '+0%',
@@ -138,8 +139,13 @@ async function signup(email, password, fullName, cpf) {
 }
 
 async function logout() {
+    if (state.documentSubscription) {
+        state.documentSubscription.unsubscribe();
+        state.documentSubscription = null;
+    }
     await supabase.auth.signOut();
     state.user = null;
+    state.payslips = [];
     state.currentPage = 'login';
     render();
 }
@@ -149,6 +155,7 @@ async function initApp() {
     if (userWithProfile) {
         state.user = userWithProfile;
         state.payslips = await fetchDocuments();
+        setupRealtime(); // Setup realtime after user is identified
         const path = window.location.pathname.substring(1);
         state.currentPage = (path && path !== 'login' && path !== 'signup') ? path : 'dashboard';
     } else {
@@ -158,15 +165,44 @@ async function initApp() {
     render();
 }
 
+function setupRealtime() {
+    if (state.documentSubscription) return;
+    if (!state.user) return;
+
+    state.documentSubscription = supabase
+        .channel('documents-changes')
+        .on(
+            'postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'documents',
+                filter: `profile_id=eq.${state.user.id}`
+            },
+            async (payload) => {
+                console.log('Realtime update received:', payload);
+                state.payslips = await fetchDocuments();
+                render();
+            }
+        )
+        .subscribe();
+}
+
 // Router
 function initRouter() {
     window.onpopstate = () => initApp();
 }
 initRouter();
 
-function navigate(page) {
+async function navigate(page) {
     state.currentPage = page;
     state.sidebarOpen = false; // Close sidebar on navigation
+    
+    // Refresh documents when navigating to list or dashboard to ensure data is fresh
+    if (page === 'list' || page === 'dashboard') {
+        state.payslips = await fetchDocuments();
+    }
+    
     const path = (page === 'login' || page === 'signup') ? `/${page}` : `/${page}`;
     window.history.pushState({}, '', page === 'login' ? '/' : path);
     render();
