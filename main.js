@@ -197,12 +197,12 @@ initRouter();
 async function navigate(page) {
     state.currentPage = page;
     state.sidebarOpen = false; // Close sidebar on navigation
-    
+
     // Refresh documents when navigating to list or dashboard to ensure data is fresh
     if (page === 'list' || page === 'dashboard') {
         state.payslips = await fetchDocuments();
     }
-    
+
     const path = (page === 'login' || page === 'signup') ? `/${page}` : `/${page}`;
     window.history.pushState({}, '', page === 'login' ? '/' : path);
     render();
@@ -297,7 +297,6 @@ window.toggleSidebar = () => {
 async function viewDocument(fileUrlOrPath) {
     if (!fileUrlOrPath) return showToast('Arquivo não encontrado.', 'error');
 
-    // Extract path if it's a full URL
     let path = fileUrlOrPath;
     if (fileUrlOrPath.includes('/public/holerites/')) {
         path = fileUrlOrPath.split('/public/holerites/')[1];
@@ -316,7 +315,50 @@ async function viewDocument(fileUrlOrPath) {
     }
 }
 
+async function downloadDocument(fileUrlOrPath, fileName = 'holerite.pdf') {
+    if (!fileUrlOrPath) return showToast('Arquivo não encontrado.', 'error');
+
+    let path = fileUrlOrPath;
+    if (fileUrlOrPath.includes('/public/holerites/')) {
+        path = fileUrlOrPath.split('/public/holerites/')[1];
+    }
+
+    try {
+        const { data, error } = await supabase.storage
+            .from('holerites')
+            .download(path);
+
+        if (error) throw error;
+
+        // Create a blob URL and trigger download
+        const blob = new Blob([data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+        showToast('Download iniciado!', 'success');
+    } catch (err) {
+        console.error('Error downloading file:', err);
+        showToast('Erro ao baixar o arquivo.', 'error');
+    }
+}
+
+function safeCreateIcons() {
+    try {
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    } catch (err) {
+        console.warn('Lucide icons could not be initialized:', err);
+    }
+}
+
 window.viewDocument = viewDocument;
+window.downloadDocument = downloadDocument;
 
 // --- RENDERING ENGINE ---
 
@@ -346,6 +388,9 @@ function render() {
         // Mobile Header
         main.appendChild(MobileHeader());
 
+        // Mobile Navigation (Bottom Bar)
+        layout.appendChild(MobileNav());
+
         if (state.currentPage === 'dashboard') main.appendChild(DashboardView());
         else if (state.currentPage === 'list') main.appendChild(ListView());
         else if (state.currentPage === 'profile') main.appendChild(ProfileView());
@@ -372,7 +417,7 @@ function render() {
         layout.appendChild(main);
         root.appendChild(layout);
     }
-    lucide.createIcons();
+    safeCreateIcons();
 }
 
 // --- VIEWS & COMPONENTS ---
@@ -435,34 +480,68 @@ function MobileHeader() {
     header.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px; color: var(--primary);">
             <i data-lucide="shield-check"></i>
-            <h2 style="font-size: 1.125rem; font-weight: 700;">Holerite App</h2>
+            <h2 style="font-size: 1.125rem; font-weight: 800; letter-spacing: -0.02em;">Holerite App</h2>
         </div>
-        <button class="menu-toggle" onclick="toggleSidebar()">
-            <i data-lucide="${state.sidebarOpen ? 'x' : 'menu'}"></i>
-        </button>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 32px; height: 32px; border-radius: 8px; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700;">
+                ${state.user?.profile?.full_name.charAt(0) || 'U'}
+            </div>
+        </div>
     `;
     return header;
 }
 
+function MobileNav() {
+    const nav = document.createElement('nav');
+    nav.className = 'mobile-nav';
+    nav.innerHTML = `
+        <a href="#" class="mobile-nav-item ${state.currentPage === 'dashboard' ? 'active' : ''}" onclick="navigate('dashboard'); return false;">
+            <i data-lucide="layout-dashboard"></i>
+            <span>Início</span>
+        </a>
+        <a href="#" class="mobile-nav-item ${state.currentPage === 'list' ? 'active' : ''}" onclick="navigate('list'); return false;">
+            <i data-lucide="file-text"></i>
+            <span>Holerites</span>
+        </a>
+        <a href="#" class="mobile-nav-item ${state.currentPage === 'profile' ? 'active' : ''}" onclick="navigate('profile'); return false;">
+            <i data-lucide="user"></i>
+            <span>Perfil</span>
+        </a>
+        ${state.user?.profile?.role === 'admin' ? `
+        <a href="#" class="mobile-nav-item ${state.currentPage.startsWith('admin') ? 'active' : ''}" onclick="navigate('admin-dashboard'); return false;">
+            <i data-lucide="shield"></i>
+            <span>Admin</span>
+        </a>
+        ` : ''}
+    `;
+    return nav;
+}
+
 function LoginView() {
     const container = document.createElement('div');
-    container.style.cssText = 'width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; background-color: var(--bg-foundation);';
+    container.style.cssText = 'width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: var(--bg-foundation); padding: 1.5rem;';
     container.innerHTML = `
-        <div class="premium-card animate-fade-in" style="width: 400px;">
-            <div style="text-align: center; margin-bottom: 2rem;">
-                <div style="width: 64px; height: 64px; background: #eff6ff; color: var(--primary); border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
-                    <i data-lucide="shield-check" style="width: 32px; height: 32px;"></i>
+        <div class="premium-card animate-fade-in" style="width: 100%; max-width: 420px; padding: 2.5rem;">
+            <div style="text-align: center; margin-bottom: 2.5rem;">
+                <div style="width: 72px; height: 72px; background: var(--primary-soft); color: var(--primary); border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                    <i data-lucide="shield-check" style="width: 36px; height: 36px;"></i>
                 </div>
-                <h1 style="font-size: 1.5rem; font-weight: 700;">Bem-vindo</h1>
-                <p style="font-size: 0.875rem; color: #64748b; margin-top: 0.5rem; line-height: 1.5;">Acesse sua conta para visualizar seus holerites e informações de perfil.</p>
+                <h1 style="font-size: 1.75rem; font-weight: 800; letter-spacing: -0.025em; color: var(--text-main);">Bem-vindo</h1>
+                <p style="font-size: 0.9375rem; color: var(--text-secondary); margin-top: 0.75rem; line-height: 1.6;">Acesse sua conta para gerenciar seus documentos de RH com segurança.</p>
             </div>
             <form onsubmit="event.preventDefault(); login(this.email.value, this.password.value);" style="display: flex; flex-direction: column; gap: 1.25rem;">
-                <input name="email" type="email" placeholder="E-mail" required class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
-                <input name="password" type="password" placeholder="Senha" required class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
-                <button type="submit" class="btn btn-primary" style="padding: 0.875rem; font-weight: 700;">Entrar</button>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">E-mail</label>
+                    <input name="email" type="email" placeholder="exemplo@empresa.com" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px;">
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Senha</label>
+                    <input name="password" type="password" placeholder="••••••••" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem; font-size: 1rem;">Acessar Portal</button>
             </form>
-            <div style="margin-top: 1.5rem; text-align: center;">
-                <p style="font-size: 0.875rem; color: var(--text-secondary);">Não tem uma conta? <a href="#" onclick="navigate('signup'); return false;" style="color: var(--primary); font-weight: 600;">Cadastre-se</a></p>
+            <div style="margin-top: 2rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                <p style="font-size: 0.875rem; color: var(--text-secondary);">Novo por aqui? <a href="#" onclick="navigate('signup'); return false;" style="color: var(--primary); font-weight: 700; text-decoration: none;">Crie sua conta</a></p>
             </div>
         </div>
     `;
@@ -471,19 +550,35 @@ function LoginView() {
 
 function SignupView() {
     const container = document.createElement('div');
-    container.style.cssText = 'width: 100%; height: 100vh; display: flex; align-items: center; justify-content: center; background-color: var(--bg-foundation);';
+    container.style.cssText = 'width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: var(--bg-foundation); padding: 1.5rem;';
     container.innerHTML = `
-        <div class="premium-card animate-fade-in" style="width: 400px;">
-            <h1 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; text-align: center;">Criar Conta</h1>
+        <div class="premium-card animate-fade-in" style="width: 100%; max-width: 440px; padding: 2.5rem;">
+            <h1 style="font-size: 1.75rem; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 0.5rem; text-align: center;">Criar Conta</h1>
+            <p style="color: var(--text-secondary); text-align: center; margin-bottom: 2rem;">Junte-se à nossa plataforma moderna de RH.</p>
+            
             <form onsubmit="event.preventDefault(); signup(this.email.value, this.password.value, this.fullName.value, this.cpf.value);" style="display: flex; flex-direction: column; gap: 1.25rem;">
-                <input name="fullName" type="text" placeholder="Nome Completo" required class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
-                <input name="cpf" type="text" placeholder="CPF (Apenas números)" required class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
-                <input name="email" type="email" placeholder="E-mail" required class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
-                <input name="password" type="password" placeholder="Senha" required class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
-                <button type="submit" class="btn btn-primary" style="padding: 0.875rem; font-weight: 700;">Cadastrar</button>
+                <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div>
+                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Nome Completo</label>
+                        <input name="fullName" type="text" placeholder="Como você quer ser chamado" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; margin-top: 0.5rem;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">CPF (apenas números)</label>
+                        <input name="cpf" type="text" placeholder="000.000.000-00" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; margin-top: 0.5rem;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">E-mail Corporativo</label>
+                        <input name="email" type="email" placeholder="seu.nome@empresa.com" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; margin-top: 0.5rem;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Senha de Acesso</label>
+                        <input name="password" type="password" placeholder="Mínimo 6 caracteres" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; margin-top: 0.5rem;">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="margin-top: 1rem; font-size: 1rem;">Finalizar Cadastro</button>
             </form>
-            <div style="margin-top: 1.5rem; text-align: center;">
-                <p style="font-size: 0.875rem; color: var(--text-secondary);">Já tem uma conta? <a href="#" onclick="navigate('login'); return false;" style="color: var(--primary); font-weight: 600;">Login</a></p>
+            <div style="margin-top: 2rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                <p style="font-size: 0.875rem; color: var(--text-secondary);">Já possui conta? <a href="#" onclick="navigate('login'); return false;" style="color: var(--primary); font-weight: 700; text-decoration: none;">Fazer Login</a></p>
             </div>
         </div>
     `;
@@ -493,16 +588,36 @@ function SignupView() {
 function DashboardView() {
     const container = document.createElement('div');
     container.innerHTML = `
-        <header style="margin-bottom: 2rem;">
-            <h1 style="font-size: 1.875rem; font-weight: 700;">Dashboard</h1>
-            <p style="color: var(--text-secondary);">Olá, ${state.user?.profile?.full_name}. Aqui estão seus documentos.</p>
+        <header style="margin-bottom: 2.5rem;">
+            <h1 style="font-size: 2rem; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 0.5rem;">Olá, ${state.user?.profile?.full_name.split(' ')[0]} 👋</h1>
+            <p style="color: var(--text-secondary); font-weight: 500;">Seja bem-vindo ao seu portal do colaborador.</p>
         </header>
 
-        <section style="display: grid; grid-template-columns: 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
+            <div class="premium-card" style="position: relative; overflow: hidden; border: none; background: linear-gradient(135deg, var(--primary), #3b82f6); color: white;">
+                <div style="position: relative; z-index: 1;">
+                    <h3 style="font-size: 1.125rem; font-weight: 700; margin-bottom: 1.5rem; opacity: 0.9;">Último Holerite</h3>
+                    <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 0.5rem;">
+                        <span style="font-size: 2.25rem; font-weight: 800;">${state.payslips[0]?.reference_month || 'Nenhum'}</span>
+                    </div>
+                    <p style="font-size: 0.875rem; opacity: 0.8; margin-bottom: 1.5rem;">Disponível para visualização</p>
+                    <button class="btn" style="background: white; color: var(--primary); width: 100%;" onclick="navigate('list')">Ver Documentos</button>
+                </div>
+                <i data-lucide="file-text" style="position: absolute; right: -20px; bottom: -20px; width: 140px; height: 140px; opacity: 0.15; transform: rotate(-15deg);"></i>
+            </div>
+            
             <div class="premium-card">
-                <h3>Último Holerite</h3>
-                <p>${state.payslips[0]?.reference_month || 'Nenhum disponível'}</p>
-                <button class="btn btn-primary btn-sm" style="margin-top: 1rem;" onclick="navigate('list')">Ver Todos</button>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1.5rem;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #f1f5f9; color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                        <i data-lucide="calendar"></i>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 700;">Próximo Ciclo</h3>
+                </div>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Seu próximo holerite estará disponível por volta do dia 05 do próximo mês.</p>
+                <div style="padding: 1rem; background: #f8fafc; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
+                    <i data-lucide="info" style="color: var(--primary); width: 18px;"></i>
+                    <span style="font-size: 0.875rem; font-weight: 600; color: var(--text-main);">Pagamentos em dia</span>
+                </div>
             </div>
         </section>
     `;
@@ -512,19 +627,40 @@ function DashboardView() {
 function ListView() {
     const container = document.createElement('div');
     container.innerHTML = `
-        <header style="margin-bottom: 2rem;">
-            <h1 style="font-size: 1.875rem; font-weight: 700;">Meus Holerites</h1>
+        <header style="margin-bottom: 2.5rem;">
+            <h1 style="font-size: 2rem; font-weight: 800; letter-spacing: -0.025em;">Meus Holerites</h1>
+            <p style="color: var(--text-secondary); font-weight: 500;">Histórico completo de seus pagamentos.</p>
         </header>
-        <div style="display: grid; gap: 1rem;">
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
             ${state.payslips.length > 0 ? state.payslips.map(doc => `
-                <div class="premium-card" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <p style="font-weight: 600;">Holerite - ${doc.reference_month}</p>
-                        <p style="font-size: 0.75rem; color: var(--text-secondary);">Data: ${new Date(doc.created_at).toLocaleDateString()}</p>
+                <div class="premium-card" style="display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-radius: 14px;">
+                    <div style="display: flex; align-items: center; gap: 1.25rem;">
+                        <div style="width: 48px; height: 48px; border-radius: 12px; background: #eff6ff; color: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <i data-lucide="file-text"></i>
+                        </div>
+                        <div>
+                            <p style="font-weight: 700; font-size: 1rem; color: var(--text-main);">${doc.reference_month}</p>
+                            <p style="font-size: 0.8125rem; color: var(--text-secondary); font-weight: 500;">Enviado em ${new Date(doc.created_at).toLocaleDateString()}</p>
+                        </div>
                     </div>
-                    <button onclick="viewDocument('${doc.file_url}')" class="btn btn-outline btn-sm">Visualizar</button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button onclick="viewDocument('${doc.file_url}')" class="btn btn-outline btn-sm" style="padding: 0.5rem; min-width: 44px;" title="Visualizar">
+                            <i data-lucide="eye" style="width: 18px;"></i>
+                        </button>
+                        <button onclick="downloadDocument('${doc.file_url}', 'Holerite-${doc.reference_month}')" class="btn btn-primary btn-sm" style="padding: 0.5rem; min-width: 44px;" title="Baixar">
+                            <i data-lucide="download" style="width: 18px;"></i>
+                        </button>
+                    </div>
                 </div>
-            `).join('') : '<p>Você ainda não possui holerites cadastrados.</p>'}
+            `).join('') : `
+                <div class="premium-card" style="text-align: center; padding: 4rem 2rem;">
+                    <div style="width: 64px; height: 64px; background: #f1f5f9; color: #94a3b8; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                        <i data-lucide="file-x" style="width: 32px; height: 32px;"></i>
+                    </div>
+                    <h3 style="font-weight: 700; color: var(--text-main);">Nenhum documento</h3>
+                    <p style="color: var(--text-secondary);">Você ainda não possui holerites cadastrados no sistema.</p>
+                </div>
+            `}
         </div>
     `;
     return container;
@@ -533,45 +669,61 @@ function ListView() {
 function ProfileView() {
     const container = document.createElement('div');
     container.innerHTML = `
-        <header style="margin-bottom: 2rem;">
-            <h1 style="font-size: 1.875rem; font-weight: 700;">Meu Perfil</h1>
-            <p style="color: var(--text-secondary);">Visualize e gerencie suas informações.</p>
+        <header style="margin-bottom: 2.5rem;">
+            <h1 style="font-size: 2rem; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 0.5rem;">Meu Perfil</h1>
+            <p style="color: var(--text-secondary); font-weight: 500;">Gerencie suas informações pessoais.</p>
         </header>
 
         <div class="premium-card">
-            <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
-                <div style="width: 80px; height: 80px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 600;">
-                    ${state.user?.profile?.full_name.charAt(0) || 'U'}
+            <div style="display: flex; align-items: center; gap: 1.5rem; margin-bottom: 2.5rem; border-bottom: 1px solid var(--border); padding-bottom: 2rem;">
+                <div style="position: relative;">
+                    <div style="width: 88px; height: 88px; border-radius: 24px; background: linear-gradient(135deg, var(--primary), #3b82f6); color: white; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 800; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.4);">
+                        ${state.user?.profile?.full_name.charAt(0) || 'U'}
+                    </div>
                 </div>
                 <div>
-                    <h3 style="font-size: 1.25rem; font-weight: 700;">${state.user?.profile?.full_name}</h3>
-                    <p style="color: var(--text-secondary);">${state.user?.profile?.role === 'admin' ? 'Administrador RH' : 'Colaborador'}</p>
+                    <h3 style="font-size: 1.5rem; font-weight: 800; letter-spacing: -0.01e; color: var(--text-main);">${state.user?.profile?.full_name}</h3>
+                    <div style="display: flex; gap: 8px; margin-top: 0.5rem;">
+                        <span class="admin-badge ${state.user?.profile?.role === 'admin' ? 'badge-admin' : 'badge-employee'}">
+                            ${state.user?.profile?.role === 'admin' ? 'Administrador' : 'Colaborador'}
+                        </span>
+                        <span class="admin-badge badge-employee">RH Ativo</span>
+                    </div>
                 </div>
             </div>
 
             <form onsubmit="event.preventDefault(); updateProfile(this.fullName.value, this.department.value);" style="display: grid; gap: 1.5rem;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
                     <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">Nome Completo</label>
-                        <input name="fullName" type="text" value="${state.user?.profile?.full_name || ''}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.75rem;">Nome Completo</label>
+                        <input name="fullName" type="text" value="${state.user?.profile?.full_name || ''}" class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px;">
                     </div>
                     <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">Departamento</label>
-                        <input name="department" type="text" value="${state.user?.profile?.department || ''}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-                    <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">E-mail</label>
-                        <input type="email" value="${state.user?.email || ''}" disabled class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f8fafc; cursor: not-allowed;">
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">CPF</label>
-                        <input type="text" value="${state.user?.profile?.cpf || ''}" disabled class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; background: #f8fafc; cursor: not-allowed;">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.75rem;">Departamento</label>
+                        <input name="department" type="text" value="${state.user?.profile?.department || ''}" class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px;">
                     </div>
                 </div>
-                <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
-                    <button type="submit" class="btn btn-primary" style="padding: 0.75rem 2rem;">Salvar Alterações</button>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.75rem;">E-mail</label>
+                        <div style="position: relative;">
+                            <input type="email" value="${state.user?.email || ''}" disabled class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; background: #f8fafc; cursor: not-allowed; padding-right: 2.5rem;">
+                            <i data-lucide="lock" style="position: absolute; right: 1rem; top: 1rem; width: 16px; color: #94a3b8;"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.75rem;">CPF</label>
+                        <div style="position: relative;">
+                            <input type="text" value="${state.user?.profile?.cpf || ''}" disabled class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; background: #f8fafc; cursor: not-allowed; padding-right: 2.5rem;">
+                            <i data-lucide="lock" style="position: absolute; right: 1rem; top: 1rem; width: 16px; color: #94a3b8;"></i>
+                        </div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem; border-top: 1px solid var(--border); padding-top: 2rem;">
+                    <button type="button" class="btn btn-outline" onclick="logout();" style="color: var(--danger); border-color: rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05);">
+                        <i data-lucide="log-out"></i> Sair do App
+                    </button>
+                    <button type="submit" class="btn btn-primary" style="padding: 0.875rem 2.5rem;">Atualizar Perfil</button>
                 </div>
             </form>
         </div>
@@ -606,68 +758,85 @@ async function AdminDashboardView() {
     const { count: totalEmployees } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
     const { data: recentDocs } = await supabase
         .from('documents')
-        .select('*, profiles(full_name, avatar_url)')
+        .select('*, profiles(full_name)')
         .order('created_at', { ascending: false })
         .limit(5);
 
     const container = document.createElement('div');
     container.innerHTML = `
-        <header style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: flex-end;">
+        <header style="margin-bottom: 2.5rem; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;">
             <div>
-                <h1 style="font-size: 1.875rem; font-weight: 800; tracking: -0.025em;">Painel Administrativo</h1>
-                <p style="color: var(--text-secondary); margin-top: 0.25rem;">Gestão em tempo real conectada ao Supabase.</p>
+                <h1 style="font-size: 2rem; font-weight: 800; tracking: -0.025em; color: var(--text-main);">Painel Administrativo</h1>
+                <p style="color: var(--text-secondary); margin-top: 0.25rem; font-weight: 500;">Gestão centralizada de colaboradores e documentos.</p>
             </div>
+            <button class="btn btn-primary" onclick="navigate('admin-upload')">
+                <i data-lucide="plus"></i> Novo Upload
+            </button>
         </header>
 
-        <section style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
+        <section style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
             <div class="premium-card">
-                <p style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 500;">Total de Colaboradores</p>
-                <h3 style="font-size: 2rem; font-weight: 800; margin-top: 0.25rem;">${totalEmployees || 0}</h3>
-            </div>
-            <div class="premium-card">
-                <p style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 500;">Armazenamento</p>
-                <div style="width: 100%; height: 8px; background: #eee; border-radius: 4px; margin-top: 1rem;">
-                    <div style="width: 5%; height: 100%; background: var(--primary); border-radius: 4px;"></div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
+                    <div style="width: 44px; height: 44px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); display: flex; align-items: center; justify-content: center;">
+                        <i data-lucide="users"></i>
+                    </div>
                 </div>
-                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">< 1% de 1GB usado</p>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em;">Colaboradores</p>
+                <h3 style="font-size: 2.5rem; font-weight: 800; margin-top: 0.5rem; color: var(--text-main);">${totalEmployees || 0}</h3>
             </div>
-            <div class="premium-card" style="background: var(--primary); color: white;">
-                <p style="font-size: 0.875rem; font-weight: 500; opacity: 0.9;">Ações Rápidas</p>
-                <button class="btn" style="background: white; color: var(--primary); margin-top: 1rem; width: 100%;" onclick="navigate('admin-upload')">Novo Upload</button>
+            <div class="premium-card">
+                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
+                    <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(16, 185, 129, 0.1); color: var(--success); display: flex; align-items: center; justify-content: center;">
+                        <i data-lucide="hard-drive"></i>
+                    </div>
+                </div>
+                <p style="font-size: 0.875rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em;">Armazenamento</p>
+                <h3 style="font-size: 2.5rem; font-weight: 800; margin-top: 0.5rem; color: var(--text-main);">< 1%</h3>
+                <div style="width: 100%; height: 6px; background: #f1f5f9; border-radius: 4px; margin-top: 1rem; overflow: hidden;">
+                    <div style="width: 2%; height: 100%; background: var(--success); border-radius: 4px;"></div>
+                </div>
             </div>
         </section>
 
         <section class="premium-card" style="padding: 0; overflow: hidden;">
-            <div style="padding: 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="font-size: 1.125rem; font-weight: 700;">Atividades Recentes</h3>
+            <div style="padding: 1.5rem 2rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-size: 1.125rem; font-weight: 700; color: var(--text-main);">Atividades Recentes</h3>
+                <button class="btn btn-outline btn-sm" onclick="navigate('admin-analytics')">Ver Tudo</button>
             </div>
             <div style="overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead style="background: #f8fafc; text-align: left;">
-                        <tr style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">
-                            <th style="padding: 1rem 1.5rem;">Colaborador</th>
-                            <th style="padding: 1rem 1.5rem;">Documento</th>
-                            <th style="padding: 1rem 1.5rem;">Data</th>
-                            <th style="padding: 1rem 1.5rem; text-align: right;">Ações</th>
+                        <tr style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">
+                            <th style="padding: 1rem 2rem;">Colaborador</th>
+                            <th style="padding: 1rem 2rem;">Documento</th>
+                            <th style="padding: 1rem 2rem;">Data</th>
+                            <th style="padding: 1rem 2rem; text-align: right;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${recentDocs?.map(doc => `
-                            <tr style="border-bottom: 1px solid var(--border);">
-                                <td style="padding: 1rem 1.5rem; font-weight: 600;">${doc.profiles?.full_name}</td>
-                                <td style="padding: 1rem 1.5rem; color: var(--text-secondary);">${doc.type} - ${doc.reference_month}</td>
-                                <td style="padding: 1rem 1.5rem; color: var(--text-secondary);">${new Date(doc.created_at).toLocaleDateString()}</td>
-                                <td style="padding: 1rem 1.5rem; text-align: right;">
-                                    <button onclick="viewDocument('${doc.file_url}')" style="background: none; border: none; color: var(--primary); cursor: pointer;"><i data-lucide="external-link"></i></button>
+                            <tr style="border-bottom: 1px solid var(--border); transition: background 0.2s;">
+                                <td style="padding: 1.25rem 2rem; font-weight: 700; color: var(--text-main);" data-label="Colaborador">${doc.profiles?.full_name}</td>
+                                <td style="padding: 1.25rem 2rem; color: var(--text-secondary); font-weight: 500;" data-label="Documento">${doc.type} - ${doc.reference_month}</td>
+                                <td style="padding: 1.25rem 2rem; color: var(--text-secondary);" data-label="Data">${new Date(doc.created_at).toLocaleDateString()}</td>
+                                <td style="padding: 1.25rem 2rem; text-align: right;">
+                                    <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                                        <button onclick="viewDocument('${doc.file_url}')" class="btn btn-outline btn-sm" style="padding: 0.5rem; min-height: 40px; min-width: 40px;" title="Visualizar">
+                                            <i data-lucide="eye" style="width: 18px;"></i>
+                                        </button>
+                                        <button onclick="downloadDocument('${doc.file_url}', 'Holerite-${doc.reference_month}')" class="btn btn-primary btn-sm" style="padding: 0.5rem; min-height: 40px; min-width: 40px;" title="Baixar">
+                                            <i data-lucide="download" style="width: 18px;"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
-                        `).join('') || '<tr><td colspan="4" style="padding: 2rem; text-align: center;">Nenhum documento encontrado.</td></tr>'}
+                        `).join('') || '<tr><td colspan="4" style="padding: 3rem; text-align: center; color: var(--text-secondary);">Nenhum documento recente.</td></tr>'}
                     </tbody>
                 </table>
             </div>
         </section>
     `;
-    lucide.createIcons();
+    safeCreateIcons();
     return container;
 }
 
@@ -722,7 +891,7 @@ function AdminAnalyticsView() {
             </div>
         </div>
     `;
-    lucide.createIcons();
+    safeCreateIcons();
     return container;
 }
 
@@ -888,7 +1057,7 @@ async function AdminUploadView() {
         navigate('admin-dashboard');
     };
 
-    lucide.createIcons();
+    safeCreateIcons();
     return container;
 }
 
@@ -900,53 +1069,53 @@ async function AdminEmployeesView() {
 
     const container = document.createElement('div');
     container.innerHTML = `
-        <header style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h1 style="font-size: 1.875rem; font-weight: 800;">Gerenciar Colaboradores</h1>
-                <p style="color: var(--text-secondary);">Lista total de perfis cadastrados.</p>
-            </div>
+        <header style="margin-bottom: 2.5rem;">
+            <h1 style="font-size: 2rem; font-weight: 800; tracking: -0.025em; color: var(--text-main);">Colaboradores</h1>
+            <p style="color: var(--text-secondary); font-weight: 500;">Gerencie o acesso e perfis de sua equipe.</p>
         </header>
 
         <section class="premium-card" style="padding: 0; overflow: hidden;">
             <div style="overflow-x: auto;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead style="background: #f8fafc; text-align: left;">
-                        <tr style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">
-                            <th style="padding: 1rem 1.5rem;">Nome / CPF</th>
-                            <th style="padding: 1rem 1.5rem;">Departamento</th>
-                            <th style="padding: 1rem 1.5rem;">Cargo</th>
-                            <th style="padding: 1rem 1.5rem; text-align: right;">Ações</th>
+                        <tr style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">
+                            <th style="padding: 1.25rem 2rem;">Nome / CPF</th>
+                            <th style="padding: 1.25rem 2rem;">Departamento</th>
+                            <th style="padding: 1.25rem 2rem;">Cargo</th>
+                            <th style="padding: 1.25rem 2rem; text-align: right;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${employees?.map(emp => `
                             <tr style="border-bottom: 1px solid var(--border); transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
-                                <td style="padding: 1rem 1.5rem;">
-                                    <p style="font-weight: 600;">${emp.full_name}</p>
-                                    <p style="font-size: 0.75rem; color: var(--text-secondary);">${emp.cpf || 'Sem CPF'}</p>
+                                <td style="padding: 1.25rem 2rem;" data-label="Nome / CPF">
+                                    <p style="font-weight: 700; color: var(--text-main);">${emp.full_name}</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 500;">${emp.cpf || 'Sem CPF'}</p>
                                 </td>
-                                <td style="padding: 1rem 1.5rem; color: var(--text-secondary);">${emp.department || 'Não definido'}</td>
-                                <td style="padding: 1rem 1.5rem;">
-                                    <span style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; font-weight: 600; background: ${emp.role === 'admin' ? '#fee2e2; color: #991b1b;' : '#f1f5f9; color: #475569;'}">
+                                <td style="padding: 1.25rem 2rem; color: var(--text-secondary); font-weight: 500;" data-label="Departamento">${emp.department || 'Geral'}</td>
+                                <td style="padding: 1.25rem 2rem;" data-label="Cargo">
+                                    <span class="admin-badge ${emp.role === 'admin' ? 'badge-admin' : 'badge-employee'}">
                                         ${emp.role === 'admin' ? 'Admin' : 'Colaborador'}
                                     </span>
                                 </td>
-                                <td style="padding: 1rem 1.5rem; text-align: right; display: flex; justify-content: flex-end; gap: 0.5rem;">
-                                    <button class="btn btn-outline btn-sm" onclick="navigate('admin-edit-employee-${emp.id}')">
-                                        <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i>
-                                    </button>
-                                    <button class="btn btn-sm" style="background: #fee2e2; color: #991b1b; padding: 0.5rem;" onclick="adminDeleteEmployee('${emp.id}', '${emp.full_name}')" title="Excluir Colaborador">
-                                        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
-                                    </button>
+                                <td style="padding: 1.25rem 2rem; text-align: right;">
+                                    <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                                        <button class="btn btn-outline btn-sm" style="padding: 0.5rem; min-width: 40px;" onclick="navigate('admin-edit-employee-${emp.id}')">
+                                            <i data-lucide="edit-3" style="width: 18px;"></i>
+                                        </button>
+                                        <button class="btn btn-sm" style="background: rgba(239, 68, 68, 0.1); color: var(--danger); padding: 0.5rem; min-width: 40px;" onclick="adminDeleteEmployee('${emp.id}', '${emp.full_name}')">
+                                            <i data-lucide="trash-2" style="width: 18px;"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
-                        `).join('') || '<tr><td colspan="4" style="padding: 2rem; text-align: center;">Nenhum colaborador encontrado.</td></tr>'}
+                        `).join('') || '<tr><td colspan="4" style="padding: 3rem; text-align: center; color: var(--text-secondary);">Nenhum colaborador encontrado.</td></tr>'}
                     </tbody>
                 </table>
             </div>
         </section>
     `;
-    lucide.createIcons();
+    safeCreateIcons();
     return container;
 }
 
@@ -1007,7 +1176,7 @@ async function AdminEditEmployeeView(id) {
             </form>
         </div>
     `;
-    lucide.createIcons();
+    safeCreateIcons();
     return container;
 }
 
