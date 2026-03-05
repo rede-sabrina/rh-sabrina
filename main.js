@@ -16,6 +16,14 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     }
 });
 
+// Setup auth listener for password recovery
+supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+        state.currentPage = 'reset-password';
+        render();
+    }
+});
+
 const state = {
     user: null,
     payslips: [],
@@ -289,6 +297,37 @@ window.navigate = navigate;
 window.login = login;
 window.signup = signup;
 window.logout = logout;
+
+async function requestPasswordReset(email) {
+    if (!email) return showToast('Preencha o e-mail.', 'error');
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/',
+    });
+    if (error) {
+        showToast('Erro: ' + error.message, 'error');
+    } else {
+        showToast('Link de recuperação enviado para seu e-mail.', 'success');
+        navigate('login');
+    }
+}
+
+async function updateNewPassword(password) {
+    if (password.length < 6) return showToast('A senha deve ter no mínimo 6 caracteres.', 'error');
+    const { data, error } = await supabase.auth.updateUser({
+        password: password
+    });
+    if (error) {
+        showToast('Erro ao redefinir a senha: ' + error.message, 'error');
+    } else {
+        showToast('Senha atualizada com sucesso!', 'success');
+        state.currentPage = 'dashboard';
+        window.history.pushState({}, '', '/dashboard');
+        await initApp();
+    }
+}
+
+window.requestPasswordReset = requestPasswordReset;
+window.updateNewPassword = updateNewPassword;
 window.toggleSidebar = () => {
     state.sidebarOpen = !state.sidebarOpen;
     render();
@@ -370,6 +409,10 @@ function render() {
         root.appendChild(LoginView());
     } else if (state.currentPage === 'signup') {
         root.appendChild(SignupView());
+    } else if (state.currentPage === 'forgot-password') {
+        root.appendChild(ForgotPasswordView());
+    } else if (state.currentPage === 'reset-password') {
+        root.appendChild(ResetPasswordView());
     } else {
         const layout = document.createElement('div');
         layout.className = `dashboard-layout animate-fade-in ${state.sidebarOpen ? 'sidebar-open' : ''}`;
@@ -543,9 +586,60 @@ function LoginView() {
             <div style="margin-top: 2rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1.5rem;">
                 <p style="font-size: 0.875rem; color: var(--text-secondary);">Novo por aqui? <a href="#" onclick="navigate('signup'); return false;" style="color: var(--primary); font-weight: 700; text-decoration: none;">Crie sua conta</a></p>
             </div>
-            <div style="margin-top: 2rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1.5rem;">
-                <p style="font-size: 0.875rem; color: var(--text-secondary);">Esqueceu a senha? Informe o suporte para redefinir.</p>
+            <div style="margin-top: 1rem; text-align: center;">
+                <p style="font-size: 0.875rem; color: var(--text-secondary);"><a href="#" onclick="navigate('forgot-password'); return false;" style="color: var(--primary); font-weight: 700; text-decoration: none;">Esqueci minha senha</a></p>
             </div>
+        </div>
+    `;
+    return container;
+}
+
+function ForgotPasswordView() {
+    const container = document.createElement('div');
+    container.style.cssText = 'width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: var(--bg-foundation); padding: 1.5rem;';
+    container.innerHTML = `
+        <div class="premium-card animate-fade-in" style="width: 100%; max-width: 420px; padding: 2.5rem;">
+            <div style="text-align: center; margin-bottom: 2.5rem;">
+                <div style="width: 72px; height: 72px; background: var(--primary-soft); color: var(--primary); border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                    <i data-lucide="key" style="width: 36px; height: 36px;"></i>
+                </div>
+                <h1 style="font-size: 1.75rem; font-weight: 800; letter-spacing: -0.025em; color: var(--text-main);">Recuperar Senha</h1>
+                <p style="font-size: 0.9375rem; color: var(--text-secondary); margin-top: 0.75rem; line-height: 1.6;">Informe seu e-mail para receber um link de redefinição seguro.</p>
+            </div>
+            <form onsubmit="event.preventDefault(); requestPasswordReset(this.email.value);" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">E-mail Corporativo</label>
+                    <input name="email" type="email" placeholder="seu.nome@empresa.com" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem; font-size: 1rem;">Enviar Link</button>
+            </form>
+            <div style="margin-top: 2rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                <p style="font-size: 0.875rem; color: var(--text-secondary);"><a href="#" onclick="navigate('login'); return false;" style="color: var(--primary); font-weight: 700; text-decoration: none;">Voltar para o Login</a></p>
+            </div>
+        </div>
+    `;
+    return container;
+}
+
+function ResetPasswordView() {
+    const container = document.createElement('div');
+    container.style.cssText = 'width: 100%; min-height: 100vh; display: flex; align-items: center; justify-content: center; background-color: var(--bg-foundation); padding: 1.5rem;';
+    container.innerHTML = `
+        <div class="premium-card animate-fade-in" style="width: 100%; max-width: 420px; padding: 2.5rem;">
+            <div style="text-align: center; margin-bottom: 2.5rem;">
+                <div style="width: 72px; height: 72px; background: rgba(16, 185, 129, 0.1); color: var(--success); border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                    <i data-lucide="lock" style="width: 36px; height: 36px;"></i>
+                </div>
+                <h1 style="font-size: 1.75rem; font-weight: 800; letter-spacing: -0.025em; color: var(--text-main);">Nova Senha</h1>
+                <p style="font-size: 0.9375rem; color: var(--text-secondary); margin-top: 0.75rem; line-height: 1.6;">Crie uma nova senha para acessar o portal.</p>
+            </div>
+            <form onsubmit="event.preventDefault(); updateNewPassword(this.password.value);" style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Nova Senha</label>
+                    <input name="password" type="password" placeholder="Mínimo 6 caracteres" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem; font-size: 1rem; background: var(--success);">Salvar Nova Senha</button>
+            </form>
         </div>
     `;
     return container;
