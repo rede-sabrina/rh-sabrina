@@ -608,7 +608,7 @@ function ForgotPasswordView() {
             </div>
             <form onsubmit="event.preventDefault(); requestPasswordReset(this.email.value);" style="display: flex; flex-direction: column; gap: 1.25rem;">
                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">E-mail Corporativo</label>
+                    <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">E-mail</label>
                     <input name="email" type="email" placeholder="seu.nome@empresa.com" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px;">
                 </div>
                 <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem; font-size: 1rem;">Enviar Link</button>
