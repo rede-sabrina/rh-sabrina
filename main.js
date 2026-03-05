@@ -543,6 +543,9 @@ function LoginView() {
             <div style="margin-top: 2rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1.5rem;">
                 <p style="font-size: 0.875rem; color: var(--text-secondary);">Novo por aqui? <a href="#" onclick="navigate('signup'); return false;" style="color: var(--primary); font-weight: 700; text-decoration: none;">Crie sua conta</a></p>
             </div>
+            <div style="margin-top: 2rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                <p style="font-size: 0.875rem; color: var(--text-secondary);">Esqueceu a senha? Informe o suporte para redefinir.</p>
+            </div>
         </div>
     `;
     return container;
@@ -567,7 +570,7 @@ function SignupView() {
                         <input name="cpf" type="text" inputmode="numeric" maxlength="11" oninput="this.value = this.value.replace(/\\D/g, '').slice(0, 11)" placeholder="Apenas os 11 números" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; margin-top: 0.5rem;">
                     </div>
                     <div>
-                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">E-mail Corporativo</label>
+                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">E-mail</label>
                         <input name="email" type="email" placeholder="seu.nome@empresa.com" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; margin-top: 0.5rem;">
                     </div>
                     <div>
