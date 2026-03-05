@@ -527,7 +527,7 @@ function LoginView() {
                     <i data-lucide="shield-check" style="width: 36px; height: 36px;"></i>
                 </div>
                 <h1 style="font-size: 1.75rem; font-weight: 800; letter-spacing: -0.025em; color: var(--text-main);">Bem-vindo</h1>
-                <p style="font-size: 0.9375rem; color: var(--text-secondary); margin-top: 0.75rem; line-height: 1.6;">Acesse sua conta para gerenciar seus documentos de RH com segurança.</p>
+                <p style="font-size: 0.9375rem; color: var(--text-secondary); margin-top: 0.75rem; line-height: 1.6;">Acesse sua conta para gerenciar seus holerites com segurança.</p>
             </div>
             <form onsubmit="event.preventDefault(); login(this.email.value, this.password.value);" style="display: flex; flex-direction: column; gap: 1.25rem;">
                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
@@ -554,7 +554,7 @@ function SignupView() {
     container.innerHTML = `
         <div class="premium-card animate-fade-in" style="width: 100%; max-width: 440px; padding: 2.5rem;">
             <h1 style="font-size: 1.75rem; font-weight: 800; letter-spacing: -0.025em; margin-bottom: 0.5rem; text-align: center;">Criar Conta</h1>
-            <p style="color: var(--text-secondary); text-align: center; margin-bottom: 2rem;">Junte-se à nossa plataforma moderna de RH.</p>
+            <p style="color: var(--text-secondary); text-align: center; margin-bottom: 2rem;">Junte-se à nossa plataforma.</p>
             
             <form onsubmit="event.preventDefault(); signup(this.email.value, this.password.value, this.fullName.value, this.cpf.value);" style="display: flex; flex-direction: column; gap: 1.25rem;">
                 <div style="display: flex; flex-direction: column; gap: 1.25rem;">
@@ -563,8 +563,8 @@ function SignupView() {
                         <input name="fullName" type="text" placeholder="Como você quer ser chamado" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; margin-top: 0.5rem;">
                     </div>
                     <div>
-                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">CPF (apenas números)</label>
-                        <input name="cpf" type="text" placeholder="000.000.000-00" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; margin-top: 0.5rem;">
+                        <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">CPF (somente números)</label>
+                        <input name="cpf" type="text" inputmode="numeric" maxlength="11" oninput="this.value = this.value.replace(/\\D/g, '').slice(0, 11)" placeholder="Apenas os 11 números" required class="form-input" style="width: 100%; padding: 0.875rem; border-radius: 12px; margin-top: 0.5rem;">
                     </div>
                     <div>
                         <label style="font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">E-mail Corporativo</label>
@@ -613,7 +613,7 @@ function DashboardView() {
                     </div>
                     <h3 style="font-size: 1.125rem; font-weight: 700;">Próximo Ciclo</h3>
                 </div>
-                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Seu próximo holerite estará disponível por volta do dia 05 do próximo mês.</p>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Seu próximo holerite estará disponível no App.</p>
                 <div style="padding: 1rem; background: #f8fafc; border-radius: 12px; display: flex; align-items: center; gap: 10px;">
                     <i data-lucide="info" style="color: var(--primary); width: 18px;"></i>
                     <span style="font-size: 0.875rem; font-weight: 600; color: var(--text-main);">Pagamentos em dia</span>
@@ -1158,8 +1158,8 @@ async function AdminEditEmployeeView(id) {
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                     <div>
-                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">CPF</label>
-                        <input name="cpf" type="text" value="${profile.cpf || ''}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
+                        <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">CPF (somente números)</label>
+                        <input name="cpf" type="text" inputmode="numeric" maxlength="11" oninput="this.value = this.value.replace(/\\D/g, '').slice(0, 11)" value="${profile.cpf || ''}" class="form-input" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">Cargo / Acesso</label>
